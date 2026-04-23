@@ -6,7 +6,7 @@
 
 - name: Configurar AD DS + DNS + NTP en DC01
   hosts: windows_personal
-  gather_facts: yes
+  gather_facts: true
 
   vars:
     ad_domain_name:       "corp.ufv.local"
@@ -23,7 +23,7 @@
     - name: Mostrar info del servidor
       ansible.builtin.debug:
         msg:
-           - "Host: {{ inventory_hostname }}"
+          - "Host: {{ inventory_hostname }}"
           - "OS: {{ ansible_facts['os_family'] }} {{ ansible_facts['os_version'] }}"
           - "Dominio objetivo: {{ ad_domain_name }}"
 
