@@ -1,81 +1,155 @@
 ---
 # =============================================================
 # Playbook: update_web.yml
-# Actualiza solo el contenido web y reinicia servicios
-# AlexPersonal: web estaticos + restart nginx
-# AlexUFV:      web estaticos + restart nginx + update node app
+# Actualización RÁPIDA de código sin despliegue completo
+# Usado para iteración rápida durante desarrollo
+# Solo actualiza archivos y reinicia servicios
 # =============================================================
 
-# ── AlexPersonal: solo web estaticos + nginx ─────────────────
-- name: Actualizar web en AlexPersonal
-  hosts: linux_personal
-  gather_facts: no
-
-  vars:
-    src_public: "/usr/local/ufv/ufv-infra/ufv-app/public"
-    dst_public: "/var/www/public"
-
-  tasks:
-    - name: Sincronizar contenido web estatico
-      ansible.builtin.copy:
-        src: "{{ src_public }}/"
-        dest: "{{ dst_public }}/"
-        owner: nginx
-        group: nginx
-        mode: '0644'
-        directory_mode: '0755'
-
-    - name: Reiniciar nginx
-      ansible.builtin.systemd:
-        name: nginx
-        state: restarted
-
-    - name: Confirmar nginx activo
-      ansible.builtin.debug:
-        msg: "✅ nginx reiniciado en {{ inventory_hostname }} ({{ instance_name | default('') }})"
-
-# ── AlexUFV: web estaticos + nginx + Node.js ─────────────────
-- name: Actualizar web y Node.js en AlexUFV
+- name: Actualización rápida de módulos Node.js en AlexUFV
   hosts: linux_ufv
   gather_facts: no
 
   vars:
-    src_public:   "/usr/local/ufv/ufv-infra/ufv-app/public"
-    dst_public:   "/var/www/public"
-    src_node_app: "/usr/local/ufv/ufv-infra/ufv-app/node/profesores.js"
-    dst_node_dir: "/usr/local/ufv/nodeService"
-    node_service: "ufvNodeService"
+    src_node_alumnos:    "/usr/local/ufv/ufv-infra/ufv-app/node/alumno.js"
+    src_node_profesores: "/usr/local/ufv/ufv-infra/ufv-app/node/profesores.js"
+    dst_node_dir:        "/var/www/app"
+    app_user:            "ec2-user"
+    app_group:           "ec2-user"
 
   tasks:
-    - name: Sincronizar contenido web estatico
-      ansible.builtin.copy:
-        src: "{{ src_public }}/"
-        dest: "{{ dst_public }}/"
-        owner: nginx
-        group: nginx
-        mode: '0644'
-        directory_mode: '0755'
-
-    - name: Reiniciar nginx
-      ansible.builtin.systemd:
-        name: nginx
-        state: restarted
-
-    - name: Actualizar profesores.js
-      ansible.builtin.copy:
-        src: "{{ src_node_app }}"
-        dest: "{{ dst_node_dir }}/profesores.js"
-        owner: root
-        group: root
-        mode: '0644'
-
-    - name: Reiniciar ufvNodeService
-      ansible.builtin.systemd:
-        name: "{{ node_service }}"
-        state: restarted
-
-    - name: Confirmar servicios activos
+    - name: " Mostrar hosts destino"
       ansible.builtin.debug:
-        msg:
-          - "✅ nginx reiniciado en {{ inventory_hostname }} ({{ instance_name | default('') }})"
-          - "✅ ufvNodeService reiniciado en {{ inventory_hostname }}"
+        msg: "Actualizando {{ inventory_hostname }}"
+
+    # ========== ACTUALIZAR ALUMNOS ==========
+    - name: " Copiar nueva versión de alumno.js"
+      ansible.builtin.copy:
+        src: "{{ src_node_alumnos }}"
+        dest: "{{ dst_node_dir }}/alumno.js"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0644'
+        backup: yes
+      become: true
+      notify: "restart alumnos service"
+      register: alumno_updated
+
+    # ========== ACTUALIZAR PROFESORES ==========
+    - name: " Copiar nueva versión de profesores.js"
+      ansible.builtin.copy:
+        src: "{{ src_node_profesores }}"
+        dest: "{{ dst_node_dir }}/profesores.js"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0644'
+        backup: yes
+      become: true
+      notify: "restart profesores service"
+      register: profesores_updated
+
+    # ========== ACTUALIZAR DEPENDENCIAS ==========
+    - name: " Actualizar dependencias npm (si package.json cambió)"
+      ansible.builtin.shell:
+        cmd: "cd {{ dst_node_dir }} && npm install --production --no-save"
+      register: npm_result
+      changed_when: "'added' in npm_result.stdout"
+      become_user: "{{ app_user }}"
+      become: true
+
+    # ========== VERIFICACIONES PRE-RESTART ==========
+    - name: " Validar sintaxis alumno.js"
+      ansible.builtin.shell:
+        cmd: "node -c {{ dst_node_dir }}/alumno.js"
+      become: true
+      register: alumno_syntax
+      failed_when: false
+      changed_when: false
+
+    - name: " Validar sintaxis profesores.js"
+      ansible.builtin.shell:
+        cmd: "node -c {{ dst_node_dir }}/profesores.js"
+      become: true
+      register: profesores_syntax
+      failed_when: false
+      changed_when: false
+
+    - name: " Advertencia: alumno.js tiene errores de sintaxis"
+      ansible.builtin.debug:
+        msg: "ERROR: {{ alumno_syntax.stderr }}"
+      when: alumno_syntax.rc != 0
+
+    - name: " Advertencia: profesores.js tiene errores de sintaxis"
+      ansible.builtin.debug:
+        msg: "ERROR: {{ profesores_syntax.stderr }}"
+      when: profesores_syntax.rc != 0
+
+    # ========== RESTART SERVICIOS ==========
+    - name: Recargar systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: yes
+      become: true
+
+    # ========== VERIFICACIONES POST-RESTART ==========
+    - name: " Esperar a que Alumnos esté listo"
+      ansible.builtin.wait_for:
+        port: 3001
+        delay: 2
+        timeout: 15
+      when: alumno_updated.changed
+
+    - name: " Esperar a que Profesores esté listo"
+      ansible.builtin.wait_for:
+        port: 3002
+        delay: 2
+        timeout: 15
+      when: profesores_updated.changed
+
+    - name: "✅ Health check Alumnos"
+      ansible.builtin.uri:
+        url: "http://localhost:3001/health"
+        method: GET
+      register: alumnos_health
+      retries: 3
+      delay: 1
+      changed_when: false
+
+    - name: " Health check Profesores"
+      ansible.builtin.uri:
+        url: "http://localhost:3002/health"
+        method: GET
+      register: profesores_health
+      retries: 3
+      delay: 1
+      changed_when: false
+
+    # ========== RESUMEN ==========
+    - name: " Mostrar resumen de actualizaciones"
+      ansible.builtin.debug:
+        msg: |
+          ACTUALIZACIÓN COMPLETADA EN {{ inventory_hostname }}
+          
+          Cambios:
+            - alumno.js (Alumno C):     {{ 'ACTUALIZADO' if alumno_updated.changed else 'sin cambios' }}
+            - profesores.js (Alumno D): {{ 'ACTUALIZADO' if profesores_updated.changed else 'sin cambios' }}
+          
+          Estado de Servicios:
+            - Alumnos (3001):     {{ alumnos_health.status | default('ERROR') }}
+            - Profesores (3002):  {{ profesores_health.status | default('ERROR') }}
+          
+           Backups guardados:
+            - alumno.js.backup     (en {{ dst_node_dir }})
+            - profesores.js.backup (en {{ dst_node_dir }})
+
+  handlers:
+    - name: "restart alumnos service"
+      ansible.builtin.systemd:
+        name: ufvAlumnosService
+        state: restarted
+      become: true
+
+    - name: "restart profesores service"
+      ansible.builtin.systemd:
+        name: ufvProfesoresService
+        state: restarted
+      become: true
