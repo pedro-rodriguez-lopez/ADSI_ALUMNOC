@@ -1,0 +1,45 @@
+[Unit]
+Description=UFV Alumnos Service - Módulo de Gestión de Estudiantes
+Documentation=https://github.com/ufv-alumno-c/alumnos-service
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=ec2-user
+Group=ec2-user
+WorkingDirectory=/var/www/app
+
+# Ejecutable
+ExecStart=/usr/bin/node /var/www/app/alumno.js
+
+# Reinicio automático
+Restart=on-failure
+RestartSec=5s
+StartLimitInterval=60
+StartLimitBurst=3
+
+# Timeout
+TimeoutStartSec=30
+TimeoutStopSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ufvAlumnos
+
+# Variables de entorno
+Environment="NODE_ENV=production"
+Environment="PORT=3001"
+Environment="DB_HOST=10.0.1.10"
+Environment="DB_PORT=5432"
+Environment="DB_USER=backend"
+Environment="DB_PASSWORD=ContraseñaSegura123"
+Environment="DB_NAME=academico"
+
+# Límites de recursos (opcional, descomentar si es necesario)
+# LimitNOFILE=65535
+# LimitNPROC=4096
+# MemoryLimit=512M
+
+[Install]
+WantedBy=multi-user.target

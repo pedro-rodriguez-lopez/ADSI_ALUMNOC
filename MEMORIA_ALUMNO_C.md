@@ -1099,24 +1099,52 @@ SELECT * FROM alumnos;
 
 ## 📋 Checklist Final de Implementación
 
-- [ ] Backend `alumno.js` implementado (10 endpoints)
-- [ ] `package.json` con dependencias (express, pg)
-- [ ] BD PostgreSQL configurada (3 tablas)
-- [ ] Ansible `deploy_app.yml` funcional
-- [ ] Ansible `update_web.yml` funcional
-- [ ] Nginx proxy configurado para /alumnos → 3001
-- [ ] 2 x EC2 con código desplegado
-- [ ] Health check: `curl /health` → 200 OK
-- [ ] Conexión BD OK: test query exitosa
-- [ ] Nginx LB: redirecciones funcionan
-- [ ] CRUD completo: C-R-U-D testado manualmente
-- [ ] Logs limpios: sin errores en journalctl
-- [ ] Documentación completada (esta memoria)
+- [x] Backend `alumno.js` implementado (10 endpoints)
+- [x] `package.json` con dependencias (express, pg)
+- [x] BD PostgreSQL configurada (3 tablas) - **Alumno B**
+- [x] Ansible `deploy_app.yml` funcional
+- [x] Ansible `update_web.yml` funcional
+- [x] Nginx proxy configurado para /alumnos → 3001
+- [x] 2 x EC2 con código desplegado
+- [x] Health check: `curl /health` → 200 OK
+- [x] Conexión BD OK: test query exitosa
+- [x] Nginx LB: redirecciones funcionan
+- [x] CRUD completo: C-R-U-D testado manualmente
+- [x] Logs limpios: sin errores en journalctl
+- [x] Documentación completada (esta memoria)
+- [x] Systemd service file: `ufvAlumnosService.service`
+
+---
+
+## 📁 Archivos Entregables - Alumno C
+
+```
+ADSI_ALUMNOC/
+├── ufv-app/node/
+│   ├── alumno.js ⭐ (API REST - 10 endpoints)
+│   ├── package.json ⭐ (dependencias)
+│   └── node_modules/ (generado con npm install)
+│
+├── ansible/
+│   ├── playbooks/
+│   │   ├── deploy_app.yml ⭐ (despliegue inicial)
+│   │   └── update_web.yml ⭐ (actualización rápida)
+│   └── inventory/
+│       └── hosts ⭐ (inventario EC2)
+│
+├── ufv-app/nginx/
+│   └── AlexUFV_nginx.conf ⭐ (proxy /alumnos → 3001)
+│
+├── ufvAlumnosService.service ⭐ (systemd service)
+├── MEMORIA_ALUMNO_C.md ⭐ (memoria completa)
+└── ALUMNO_C_README.md ✅ (documentación técnica)
+```
 
 ---
 
 **Documentación:** Memoria de Práctica - Alumno C  
 **Versión:** 1.0  
 **Fecha:** 25 de abril de 2026  
-**Estado:** ✅ En Desarrollo  
-**Autor:** Alumno C
+**Estado:** ✅ **COMPLETADO 100%**  
+**Autor:** Alumno C  
+**Responsable de validación:** Profesor ADSI
