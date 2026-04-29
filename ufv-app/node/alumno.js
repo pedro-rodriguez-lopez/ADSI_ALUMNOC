@@ -309,9 +309,17 @@ app.get('/alumnos/inscripciones', async (req, res) => {
         if (result.rows.length === 0) {
             html += '<p><em>No hay inscripciones registradas</em></p>';
         } else {
-            html += '<table><tr><th>Alumno</th><th>Asignatura</th><th>Nota</th></tr>';
+            html += '<table><tr><th>Alumno</th><th>Asignatura</th><th>Nota</th><th>Acciones</th></tr>';
             result.rows.forEach(r => {
-                html += `<tr><td>${r.alumno}</td><td>${r.asignatura}</td><td>${r.nota || 'N/A'}</td></tr>`;
+                html += `<tr>
+                    <td>${r.alumno}</td>
+                    <td>${r.asignatura}</td>
+                    <td>${r.nota || 'Pendiente'}</td>
+                    <td>
+                        <a href="/alumnos/inscripciones/editar/${r.id}"> Editar</a> | 
+                        <a href="/alumnos/inscripciones/borrar/${r.id}" onclick="return confirm('¿Estás seguro?')"> Borrar</a>
+                    </td>
+                </tr>`;
             });
             html += '</table>';
         }
@@ -350,10 +358,140 @@ app.get('/alumnos/:id/inscripciones', async (req, res) => {
             html += '</table>';
         }
         
+        html += `<br><a href="/alumnos/${req.params.id}/inscribirse" class="btn"> Añadir Inscripción</a>`;
         html += `<br><a href="/alumnos">Volver a Alumnos</a>`;
         res.send(getBaseHTML("Inscripciones", html));
     } catch (err) { 
         console.error('Error en GET /alumnos/:id/inscripciones:', err);
+        res.status(500).send(getBaseHTML("Error", `<div class='error'> Error: ${err.message}</div>`)); 
+    }
+});
+
+// GET: Formulario para inscribir un alumno en una asignatura
+app.get('/alumnos/:alumno_id/inscribirse', async (req, res) => {
+    try {
+        const alumnoResult = await pool.query('SELECT nombre FROM academico.alumnos WHERE id = $1', [req.params.alumno_id]);
+        if (alumnoResult.rows.length === 0) return res.status(404).send(getBaseHTML("Error", "<div class='error'> Alumno no encontrado</div>"));
+        
+        const asignaturasResult = await pool.query('SELECT id, nombre FROM academico.asignaturas ORDER BY nombre');
+        
+        let options = '<option value="">-- Selecciona una asignatura --</option>';
+        asignaturasResult.rows.forEach(row => {
+            options += `<option value="${row.id}">${row.nombre}</option>`;
+        });
+        
+        const form = `
+            <h2>Inscribir ${alumnoResult.rows[0].nombre} en Asignatura</h2>
+            <form action="/alumnos/inscripciones" method="POST">
+                <input type="hidden" name="alumno_id" value="${req.params.alumno_id}">
+                <div class="form-group">
+                    <label>Asignatura:</label>
+                    <select name="asignatura_id" required>
+                        ${options}
+                    </select>
+                </div>
+                <button type="submit"> Inscribir</button>
+                <a href="/alumnos/${req.params.alumno_id}/inscripciones">Cancelar</a>
+            </form>`;
+        res.send(getBaseHTML("Nueva Inscripción", form));
+    } catch (err) { 
+        console.error('Error en GET /alumnos/:alumno_id/inscribirse:', err);
+        res.status(500).send(getBaseHTML("Error", `<div class='error'> Error: ${err.message}</div>`)); 
+    }
+});
+
+// POST: Crear nueva inscripción
+app.post('/alumnos/inscripciones', async (req, res) => {
+    const { alumno_id, asignatura_id } = req.body;
+    try {
+        if (!alumno_id || !asignatura_id) {
+            return res.status(400).send(getBaseHTML("Error", "<div class='error'> Alumno y asignatura son obligatorios</div>"));
+        }
+        
+        // Verificar que no esté ya inscrito
+        const checkResult = await pool.query(
+            'SELECT id FROM academico.inscripciones WHERE alumno_id = $1 AND asignatura_id = $2',
+            [alumno_id, asignatura_id]
+        );
+        if (checkResult.rows.length > 0) {
+            return res.status(400).send(getBaseHTML("Error", "<div class='error'> El alumno ya está inscrito en esa asignatura</div>"));
+        }
+        
+        await pool.query(
+            'INSERT INTO academico.inscripciones(alumno_id, asignatura_id, fecha_inscripcion) VALUES($1, $2, NOW())',
+            [alumno_id, asignatura_id]
+        );
+        res.redirect(`/alumnos/${alumno_id}/inscripciones`);
+    } catch (err) { 
+        console.error('Error en POST /alumnos/inscripciones:', err);
+        res.status(500).send(getBaseHTML("Error", `<div class='error'> Error: ${err.message}</div>`)); 
+    }
+});
+
+// GET: Formulario editar inscripción (nota)
+app.get('/alumnos/inscripciones/editar/:id', async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT i.id, i.nota, i.alumno_id, i.asignatura_id, a.nombre as alumno, as2.nombre as asignatura
+             FROM academico.inscripciones i
+             JOIN academico.alumnos a ON i.alumno_id = a.id
+             JOIN academico.asignaturas as2 ON i.asignatura_id = as2.id
+             WHERE i.id = $1`,
+            [req.params.id]
+        );
+        if (result.rows.length === 0) return res.status(404).send(getBaseHTML("Error", "<div class='error'> Inscripción no encontrada</div>"));
+        
+        const r = result.rows[0];
+        const form = `
+            <h2>Editar Inscripción</h2>
+            <p><strong>Alumno:</strong> ${r.alumno}</p>
+            <p><strong>Asignatura:</strong> ${r.asignatura}</p>
+            <form action="/alumnos/inscripciones/update" method="POST">
+                <input type="hidden" name="id" value="${r.id}">
+                <input type="hidden" name="alumno_id" value="${r.alumno_id}">
+                <div class="form-group">
+                    <label>Nota:</label>
+                    <input type="number" step="0.1" min="0" max="10" name="nota" value="${r.nota || ''}" placeholder="Ej: 8.5">
+                </div>
+                <button type="submit">Actualizar Nota</button>
+                <a href="/alumnos/inscripciones">Cancelar</a>
+            </form>`;
+        res.send(getBaseHTML("Editar Inscripción", form));
+    } catch (err) { 
+        console.error('Error en GET /alumnos/inscripciones/editar/:id:', err);
+        res.status(500).send(getBaseHTML("Error", `<div class='error'> Error: ${err.message}</div>`)); 
+    }
+});
+
+// POST: Actualizar inscripción (nota)
+app.post('/alumnos/inscripciones/update', async (req, res) => {
+    const { id, nota, alumno_id } = req.body;
+    try {
+        const result = await pool.query(
+            'UPDATE academico.inscripciones SET nota=$1 WHERE id=$2 RETURNING id',
+            [nota || null, id]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).send(getBaseHTML("Error", "<div class='error'> Inscripción no encontrada</div>"));
+        }
+        res.redirect(`/alumnos/${alumno_id}/inscripciones`);
+    } catch (err) { 
+        console.error('Error en POST /alumnos/inscripciones/update:', err);
+        res.status(500).send(getBaseHTML("Error", `<div class='error'> Error: ${err.message}</div>`)); 
+    }
+});
+
+// GET: Borrar inscripción
+app.get('/alumnos/inscripciones/borrar/:id', async (req, res) => {
+    try {
+        const inscResult = await pool.query('SELECT alumno_id FROM academico.inscripciones WHERE id = $1', [req.params.id]);
+        if (inscResult.rows.length === 0) return res.status(404).send(getBaseHTML("Error", "<div class='error'> Inscripción no encontrada</div>"));
+        
+        const alumno_id = inscResult.rows[0].alumno_id;
+        await pool.query('DELETE FROM academico.inscripciones WHERE id = $1', [req.params.id]);
+        res.redirect(`/alumnos/${alumno_id}/inscripciones`);
+    } catch (err) { 
+        console.error('Error en GET /alumnos/inscripciones/borrar/:id:', err);
         res.status(500).send(getBaseHTML("Error", `<div class='error'> Error: ${err.message}</div>`)); 
     }
 });
