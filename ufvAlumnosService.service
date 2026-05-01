@@ -1,6 +1,6 @@
 [Unit]
-Description=UFV Alumnos Service - Módulo de Gestión de Estudiantes
-Documentation=https://github.com/ufv-alumno-c/alumnos-service
+Description=UFV Prácticas Service - Módulo de Gestión de Prácticas y Entregas
+Documentation=https://github.com/ufv-alumno-c/practicas-service
 After=network.target postgresql.service
 
 [Service]
@@ -10,7 +10,7 @@ Group=ec2-user
 WorkingDirectory=/var/www/app
 
 # Ejecutable
-ExecStart=/usr/bin/node /var/www/app/alumno.js
+ExecStart=/usr/bin/node /var/www/app/practicas.js
 
 # Reinicio automático
 Restart=on-failure
@@ -25,7 +25,7 @@ TimeoutStopSec=10
 # Logging
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=ufvAlumnos
+SyslogIdentifier=ufvPracticas
 
 # Variables de entorno
 Environment="NODE_ENV=production"

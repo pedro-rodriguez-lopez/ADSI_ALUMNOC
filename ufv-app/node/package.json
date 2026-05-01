@@ -1,12 +1,13 @@
 {
   "name": "academico-app",
   "version": "1.0.0",
-  "description": "Aplicación académica distribuida",
-  "main": "node/profesores.js",
+  "description": "Aplicación académica distribuida - Módulo de Prácticas",
+  "main": "node/practicas.js",
   "scripts": {
+    "start:practicas": "node node/practicas.js",
     "start:profesores": "node node/profesores.js",
     "start:alumnos": "node node/alumno.js",
-    "start": "node node/alumno.js"
+    "start": "node node/practicas.js"
   },
   "dependencies": {
     "express": "^4.18.2",

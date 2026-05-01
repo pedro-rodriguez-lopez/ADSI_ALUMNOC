@@ -6,11 +6,11 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const pool = new Pool({
-    host: '10.0.1.10' || 'localhost',
-    user: 'backend',
-    password: 'ContraseñaSegura123',
-    database: 'academico',
-    port: 5432
+    host: process.env.DB_HOST || '10.0.1.10',
+    user: process.env.DB_USER || 'backend',
+    password: process.env.DB_PASSWORD || 'ContraseñaSegura123',
+    database: process.env.DB_NAME || 'academico',
+    port: process.env.DB_PORT || 5432
 });
 
 const getBaseHTML = (title, content) => `
